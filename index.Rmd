@@ -1,0 +1,8 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "SN de Koning"
+date: "23 maart 2016"
+output: html_document
+---
+
+Placeholder text
