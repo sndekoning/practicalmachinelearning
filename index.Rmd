@@ -5,4 +5,100 @@ date: "23 maart 2016"
 output: html_document
 ---
 
-Placeholder text
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website [here](http://groupware.les.inf.puc-rio.br/har "http://groupware.les.inf.puc-rio.br/har") (see the section on the Weight Lifting Exercise Data-set).
+
+### Goal
+
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. From the 160 variables included in this dataset, only variables without a large (90%) amount of missing entries and those who are not highly correlated with each other were used. This model will also be used to predict 20 different test cases.
+
+### Getting and cleaning the data.
+
+To create this model the `caret` and `randomForest` packages were used.
+```{r, message=FALSE}
+library(caret)
+library(randomForest)
+```
+
+Then we download and load in the data. 
+
+```{r, cache=TRUE}
+if(!dir.exists("./data")){
+  dir.create("./data")
+  
+  if(!file.exists("./data/training.csv")){
+    train.url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+    download.file(train.url, "./data/training.csv")
+    rm(train.url)
+  }
+  if(!file.exists("./data/testing.csv")){
+    test.url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+    download.file(test.url, "./data/testing.csv")
+    rm(test.url)
+  }
+}
+
+training <- read.csv("./data/training.csv", na.strings = c("", "NA"))
+testing <- read.csv("./data/testing.csv", na.strings = "NA")
+
+dim(training); dim(testing)
+```
+
+First, the identifier variables, such as participant name, timestamps, etc were removed, as they do not contribute to the model.
+
+```{r}
+training <- training[, -c(1:7)]
+```
+
+The second transformation applied to the data set was the removal of the variables that had a high number of missing values. 
+
+```{r}
+na <- NULL
+for(i in 1:ncol(training)){
+  na[i] <- sum(is.na(training[, i]))
+}
+high.na <- names(training[, na > (0.9*nrow(training))])
+training <- training[, !names(training) %in% high.na]
+```
+
+As including variables who are highly correlated with each other increases bias in the model, we exclude those as well.
+
+```{r}
+corr <- cor(training[, -length(training)])
+cutoff <- findCorrelation(corr, cutoff = .9)
+training <- training[, -cutoff]
+```
+
+After transformation, `r dim(training)[2]` variables remain where the model will be build upon.
+
+### Cross validation.
+
+To to be able to perform cross validation on the model, the training set was further split up.
+
+```{r}
+in.train <- createDataPartition(y = training$classe, p = .7, list = FALSE)
+
+mod.train <- training[in.train ,]
+mod.test <- training[ -in.train ,]
+```
+
+### Fitting a model.
+
+Because of its high accuracy, and its ability to run on large databases, the Random Forest method was chosen. 
+
+
+```{r, cache=TRUE}
+rf.model <- train(classe ~ ., method = "rf", data = mod.train)
+```
+
+```{r}
+# predicting on the cross validation set.
+pred.cv <- predict(rf.model, mod.test)
+
+confusionMatrix(pred.cv, mod.test$classe)
+
+final.pred <- predict(rf.model, testing)
+print(final.pred)
+```
+
