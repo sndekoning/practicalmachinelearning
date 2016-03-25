@@ -115,7 +115,183 @@ $(document).ready(function () {
 </div>
 
 
-<p>Placeholder text</p>
+<div id="background" class="section level3">
+<h3>Background</h3>
+<p>Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website <a href="http://groupware.les.inf.puc-rio.br/har" title="http://groupware.les.inf.puc-rio.br/har">here</a> (see the section on the Weight Lifting Exercise Data-set).</p>
+</div>
+<div id="goal" class="section level3">
+<h3>Goal</h3>
+<p>The goal of this project is to predict the manner in which they did the exercise. This is the “classe” variable in the training set. From the 160 variables included in this dataset, only variables without a large (90%) amount of missing entries and those who are not highly correlated with each other were used. This model will also be used to predict 20 different test cases.</p>
+</div>
+<div id="getting-and-cleaning-the-data." class="section level3">
+<h3>Getting and cleaning the data.</h3>
+<p>To create this model the <code>caret</code> and <code>randomForest</code> packages were used.</p>
+<pre class="r"><code>library(caret)
+library(randomForest)</code></pre>
+<p>Then we download and load in the data.</p>
+<pre class="r"><code>if(!dir.exists(&quot;./data&quot;)){
+  dir.create(&quot;./data&quot;)
+  
+  if(!file.exists(&quot;./data/training.csv&quot;)){
+    train.url &lt;- &quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv&quot;
+    download.file(train.url, &quot;./data/training.csv&quot;)
+    rm(train.url)
+  }
+  if(!file.exists(&quot;./data/testing.csv&quot;)){
+    test.url &lt;- &quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv&quot;
+    download.file(test.url, &quot;./data/testing.csv&quot;)
+    rm(test.url)
+  }
+}
+
+training &lt;- read.csv(&quot;./data/training.csv&quot;, na.strings = c(&quot;&quot;, &quot;NA&quot;))
+testing &lt;- read.csv(&quot;./data/testing.csv&quot;, na.strings = &quot;NA&quot;)
+
+dim(training); dim(testing)</code></pre>
+<pre><code>## [1] 19622   160</code></pre>
+<pre><code>## [1]  20 160</code></pre>
+<p>First, the identifier variables, such as participant name, timestamps, etc were removed, as they do not contribute to the model.</p>
+<pre class="r"><code>training &lt;- training[, -c(1:7)]</code></pre>
+<p>The second transformation applied to the data set was the removal of the variables that had a high number of missing values.</p>
+<pre class="r"><code>na &lt;- NULL
+for(i in 1:ncol(training)){
+  na[i] &lt;- sum(is.na(training[, i]))
+}
+high.na &lt;- names(training[, na &gt; (0.9*nrow(training))])
+training &lt;- training[, !names(training) %in% high.na]</code></pre>
+<p>As including variables who are highly correlated with each other increases bias in the model, we exclude those as well.</p>
+<pre class="r"><code>corr &lt;- cor(training[, -length(training)])
+cutoff &lt;- findCorrelation(corr, cutoff = .9)
+training &lt;- training[, -cutoff]</code></pre>
+<p>After transformation, 46 variables remain where the model will be build upon.</p>
+</div>
+<div id="cross-validation." class="section level3">
+<h3>Cross validation.</h3>
+<p>To to be able to perform cross validation on the model, the training set was further split up.</p>
+<pre class="r"><code>in.train &lt;- createDataPartition(y = training$classe, p = .7, list = FALSE)
+
+mod.train &lt;- training[in.train ,]
+mod.test &lt;- training[ -in.train ,]</code></pre>
+</div>
+<div id="fitting-a-model." class="section level3">
+<h3>Fitting a model.</h3>
+<p>Because of its high accuracy, and its ability to run on large databases, the Random Forest method was chosen to fit the model.</p>
+<pre class="r"><code>rf.model &lt;- train(classe ~ ., method = &quot;rf&quot;, data = mod.train)
+print(rf.model)</code></pre>
+<pre><code>## Random Forest 
+## 
+## 13737 samples
+##    45 predictor
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
+## 
+## No pre-processing
+## Resampling: Bootstrapped (25 reps) 
+## Summary of sample sizes: 13737, 13737, 13737, 13737, 13737, 13737, ... 
+## Resampling results across tuning parameters:
+## 
+##   mtry  Accuracy   Kappa      Accuracy SD  Kappa SD   
+##    2    0.9868574  0.9833823  0.001925646  0.002425263
+##   23    0.9895599  0.9867996  0.001643541  0.002073093
+##   45    0.9801859  0.9749455  0.003661769  0.004623424
+## 
+## Accuracy was used to select the optimal model using  the largest value.
+## The final value used for the model was mtry = 23.</code></pre>
+<pre class="r"><code># predicting on the cross validation set.
+cv.pred &lt;- predict(rf.model, mod.test)
+
+confusionMatrix(cv.pred, mod.test$classe)</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1673   11    0    0    0
+##          B    0 1125    6    0    0
+##          C    1    3 1018   14    6
+##          D    0    0    2  949    5
+##          E    0    0    0    1 1071
+## 
+## Overall Statistics
+##                                          
+##                Accuracy : 0.9917         
+##                  95% CI : (0.989, 0.9938)
+##     No Information Rate : 0.2845         
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16      
+##                                          
+##                   Kappa : 0.9895         
+##  Mcnemar's Test P-Value : NA             
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9994   0.9877   0.9922   0.9844   0.9898
+## Specificity            0.9974   0.9987   0.9951   0.9986   0.9998
+## Pos Pred Value         0.9935   0.9947   0.9770   0.9927   0.9991
+## Neg Pred Value         0.9998   0.9971   0.9983   0.9970   0.9977
+## Prevalence             0.2845   0.1935   0.1743   0.1638   0.1839
+## Detection Rate         0.2843   0.1912   0.1730   0.1613   0.1820
+## Detection Prevalence   0.2862   0.1922   0.1771   0.1624   0.1822
+## Balanced Accuracy      0.9984   0.9932   0.9936   0.9915   0.9948</code></pre>
+<p>Through this algorithm a model is generated with an accuracy of 99.17%.</p>
+</div>
+<div id="important-contributors." class="section level3">
+<h3>Important contributors.</h3>
+<p>In the table below the variables can be seen with their corresponding decreasein accuracy if excluded.</p>
+<pre class="r"><code>importance &lt;- varImp(rf.model)$importance
+importance </code></pre>
+<pre><code>##                          Overall
+## pitch_belt            65.3622593
+## yaw_belt             100.0000000
+## total_accel_belt      16.3800184
+## gyros_belt_x           4.0167582
+## gyros_belt_y           3.9818025
+## gyros_belt_z          28.9370724
+## magnet_belt_x         18.6219684
+## magnet_belt_y         46.1385188
+## magnet_belt_z         31.5843358
+## roll_arm              14.1976778
+## pitch_arm              6.9461869
+## yaw_arm               13.9151277
+## total_accel_arm        2.6109929
+## gyros_arm_y            7.5588633
+## gyros_arm_z            0.0000000
+## accel_arm_x            9.9333803
+## accel_arm_y            6.7551585
+## accel_arm_z            3.9506918
+## magnet_arm_x          10.6329771
+## magnet_arm_y           8.8486573
+## magnet_arm_z           8.8949921
+## roll_dumbbell         29.1430458
+## pitch_dumbbell         5.3487250
+## yaw_dumbbell          12.0550623
+## total_accel_dumbbell  18.4903370
+## gyros_dumbbell_y      10.7336659
+## accel_dumbbell_x       7.6837217
+## accel_dumbbell_y      25.1917879
+## accel_dumbbell_z      18.9904967
+## magnet_dumbbell_x     28.9651974
+## magnet_dumbbell_y     52.5777869
+## magnet_dumbbell_z     68.1142497
+## roll_forearm          47.6788757
+## pitch_forearm         87.7402442
+## yaw_forearm            7.3561524
+## total_accel_forearm    2.9100746
+## gyros_forearm_x        0.3902997
+## gyros_forearm_y        3.8714833
+## gyros_forearm_z        1.2272334
+## accel_forearm_x       22.5956279
+## accel_forearm_y        4.0349226
+## accel_forearm_z       19.6498020
+## magnet_forearm_x       8.8350517
+## magnet_forearm_y       8.0094635
+## magnet_forearm_z      17.0292309</code></pre>
+</div>
+<div id="results." class="section level3">
+<h3>Results.</h3>
+<pre class="r"><code>final.pred &lt;- predict(rf.model, testing)
+print(final.pred)</code></pre>
+<pre><code>##  [1] B A B A A E D B A A B C B A E E A B B B
+## Levels: A B C D E</code></pre>
+</div>
 
 
 

@@ -85,19 +85,35 @@ mod.test <- training[ -in.train ,]
 
 ### Fitting a model.
 
-Because of its high accuracy, and its ability to run on large databases, the Random Forest method was chosen. 
+Because of its high accuracy, and its ability to run on large databases, the Random Forest method was chosen to fit the model. 
 
 
 ```{r, cache=TRUE}
 rf.model <- train(classe ~ ., method = "rf", data = mod.train)
+print(rf.model)
 ```
 
 ```{r}
 # predicting on the cross validation set.
-pred.cv <- predict(rf.model, mod.test)
+cv.pred <- predict(rf.model, mod.test)
 
-confusionMatrix(pred.cv, mod.test$classe)
+confusionMatrix(cv.pred, mod.test$classe)
+```
 
+Through this algorithm a model is generated with an accuracy of 99.17%.
+
+### Important contributors.
+
+In the table below the variables can be seen with their importance scores.
+
+```{r}
+importance <- varImp(rf.model)$importance
+importance 
+```
+
+### Results.
+
+```{r}
 final.pred <- predict(rf.model, testing)
 print(final.pred)
 ```
